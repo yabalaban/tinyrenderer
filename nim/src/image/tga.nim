@@ -38,8 +38,8 @@ type
 proc createTgaImage*(buffer: Buffer): TGAImage = 
   result.header.imageType = 0x02
 
-  copyMem(addr result.header.imageSpec.width, unsafeAddr buffer.width, sizeof(uint16))
-  copyMem(addr result.header.imageSpec.height, unsafeAddr buffer.height, sizeof(uint16))
+  copyMem(addr result.header.imageSpec.width, unsafeAddr buffer.width, sizeof(uint))
+  copyMem(addr result.header.imageSpec.height, unsafeAddr buffer.height, sizeof(uint))
 
   case buffer.pixelType 
   of RGB:
