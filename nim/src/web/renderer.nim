@@ -105,11 +105,29 @@ proc project(r: Renderer, v: Vertex): tuple[x, y: int, z: float] =
 
   result = (x: x, y: y, z: rotated.z)
 
-proc drawModel(r: Renderer, wireColor: Color) =
-  # Calculate face normals and sort by depth for basic depth sorting
-  type FaceInfo = tuple[face: Face, depth: float]
-  var faceInfos: seq[FaceInfo] = @[]
+proc isInsideFrustum(r: Renderer, p: tuple[x, y: int, z: float]): bool =
+  ## Frustum culling - check if projected point is within view bounds
+  let margin = 50  # Allow some margin for partially visible triangles
+  p.x >= -margin and p.x < r.width + margin and
+  p.y >= -margin and p.y < r.height + margin and
+  p.z > -10.0  # Near plane culling
 
+proc triangleVisible(r: Renderer, p0, p1, p2: tuple[x, y: int, z: float]): bool =
+  ## Check if at least one vertex is potentially visible
+  r.isInsideFrustum(p0) or r.isInsideFrustum(p1) or r.isInsideFrustum(p2)
+
+import std/algorithm
+
+proc drawModel(r: Renderer, wireColor: Color) =
+  type FaceData = tuple[
+    face: Face,
+    depth: float,
+    rv0, rv1, rv2: Vec3,  # Rotated vertices
+    p0, p1, p2: tuple[x, y: int, z: float]  # Projected points
+  ]
+  var visibleFaces: seq[FaceData] = @[]
+
+  # First pass: transform, cull backfaces, cull frustum
   for face in r.model.faces:
     let v0 = r.model.vertices[face.i0]
     let v1 = r.model.vertices[face.i1]
@@ -120,30 +138,45 @@ proc drawModel(r: Renderer, wireColor: Color) =
     let rv1 = v1.rotateY(r.rotationY).rotateX(r.rotationX)
     let rv2 = v2.rotateY(r.rotationY).rotateX(r.rotationX)
 
+    # Backface culling - compute face normal
+    let edge1 = rv1 - rv0
+    let edge2 = rv2 - rv0
+    let normal = cross(edge1, edge2)
+
+    # Skip back-facing triangles (normal pointing away from camera)
+    if normal.z >= 0:
+      continue
+
+    # Project vertices
+    let p0 = r.project(v0)
+    let p1 = r.project(v1)
+    let p2 = r.project(v2)
+
+    # Frustum culling - skip if entirely outside view
+    if not r.triangleVisible(p0, p1, p2):
+      continue
+
+    # Store for depth sorting
     let avgDepth = (rv0.z + rv1.z + rv2.z) / 3.0
-    faceInfos.add((face: face, depth: avgDepth))
+    visibleFaces.add((
+      face: face,
+      depth: avgDepth,
+      rv0: rv0, rv1: rv1, rv2: rv2,
+      p0: p0, p1: p1, p2: p2
+    ))
 
-  # Draw wireframe
-  for faceInfo in faceInfos:
-    let face = faceInfo.face
-    let p0 = r.project(r.model.vertices[face.i0])
-    let p1 = r.project(r.model.vertices[face.i1])
-    let p2 = r.project(r.model.vertices[face.i2])
+  # Depth sort: painter's algorithm (back to front)
+  visibleFaces.sort(proc(a, b: FaceData): int =
+    if a.depth > b.depth: -1
+    elif a.depth < b.depth: 1
+    else: 0
+  )
 
-    # Calculate normal for backface culling
-    let v0 = r.model.vertices[face.i0].rotateY(r.rotationY).rotateX(r.rotationX)
-    let v1 = r.model.vertices[face.i1].rotateY(r.rotationY).rotateX(r.rotationX)
-    let v2 = r.model.vertices[face.i2].rotateY(r.rotationY).rotateX(r.rotationX)
-
-    let edge1 = v1 - v0
-    let edge2 = v2 - v0
-    let normal = cross(edge1, edge2).normalize()
-
-    # Simple backface culling - only draw if facing camera
-    if normal.z < 0:
-      r.drawLine(p0.x, p0.y, p1.x, p1.y, wireColor)
-      r.drawLine(p1.x, p1.y, p2.x, p2.y, wireColor)
-      r.drawLine(p2.x, p2.y, p0.x, p0.y, wireColor)
+  # Draw visible faces
+  for fd in visibleFaces:
+    r.drawLine(fd.p0.x, fd.p0.y, fd.p1.x, fd.p1.y, wireColor)
+    r.drawLine(fd.p1.x, fd.p1.y, fd.p2.x, fd.p2.y, wireColor)
+    r.drawLine(fd.p2.x, fd.p2.y, fd.p0.x, fd.p0.y, wireColor)
 
 proc render(r: Renderer) =
   r.clear()
