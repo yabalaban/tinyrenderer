@@ -262,7 +262,9 @@ proc drawModel(r: Renderer) =
 
 proc render(r: Renderer) =
   r.clear()
-  if r.model.vertices.len > 0:
+  var hasTexture: bool
+  {.emit: [hasTexture, " = !!", r.texture, " && !!", r.texture, ".jsData && !!", r.texture, ".jsData.data;"].}
+  if r.model.vertices.len > 0 and hasTexture:
     r.drawModel()
 
   # Copy pixel data to canvas
