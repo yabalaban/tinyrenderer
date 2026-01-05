@@ -1,5 +1,5 @@
 ## Web-based software renderer using HTML5 Canvas
-import std/[dom, asyncjs, jsffi, math, strutils, sequtils]
+import std/[dom, asyncjs, jsffi, strutils, algorithm, math]
 import vec3
 
 # Fetch API bindings for JS backend
@@ -36,12 +36,13 @@ type
 
 var renderer: Renderer
 
-proc createColor(r, g, b: uint8, a: uint8 = 255): Color =
+proc createColor(r, g, b: uint8, a: uint8 = 255): Color {.inline.} =
   Color(r: r, g: g, b: b, a: a)
 
-proc whiteColor(): Color = createColor(255, 255, 255)
-proc greenColor(): Color = createColor(0, 255, 100)
-proc blueColor(): Color = createColor(100, 150, 255)
+# Cached color constants
+let
+  bgColor = createColor(20, 20, 30)
+  wireColor = createColor(0, 255, 100)
 
 proc setPixel(r: Renderer, x, y: int, c: Color) =
   if x < 0 or x >= r.width or y < 0 or y >= r.height:
@@ -54,10 +55,16 @@ proc setPixel(r: Renderer, x, y: int, c: Color) =
   r.pixels[idx + 2] = c.b.int
   r.pixels[idx + 3] = c.a.int
 
-proc clear(r: Renderer, c: Color = createColor(20, 20, 30)) =
-  for y in 0..<r.height:
-    for x in 0..<r.width:
-      r.setPixel(x, y, c)
+proc clear(r: Renderer) =
+  # Direct buffer fill - much faster than per-pixel setPixel calls
+  let totalPixels = r.width * r.height
+  var idx = 0
+  for i in 0..<totalPixels:
+    r.pixels[idx] = bgColor.r.int
+    r.pixels[idx + 1] = bgColor.g.int
+    r.pixels[idx + 2] = bgColor.b.int
+    r.pixels[idx + 3] = bgColor.a.int
+    idx += 4
 
 proc drawLine(r: Renderer, x0, y0, x1, y1: int, c: Color) =
   var x0 = x0
@@ -91,19 +98,18 @@ proc drawLine(r: Renderer, x0, y0, x1, y1: int, c: Color) =
       y += yStep
       error -= dx * 2
 
-proc project(r: Renderer, v: Vertex): tuple[x, y: int, z: float] =
-  # Apply rotations
-  var rotated = v.rotateY(r.rotationY).rotateX(r.rotationX)
-
-  # Simple perspective projection
-  let fov = 2.0
+proc projectRotated(r: Renderer, rotated: Vec3): tuple[x, y: int, z: float] {.inline.} =
+  ## Project already-rotated vertex to screen coordinates
+  const fov = 2.0
   let z = rotated.z + 3.0  # Move model back
   let scale = fov / max(z, 0.1)
-
-  let x = int((rotated.x * scale + 1.0) * float(r.width) / 2.0)
-  let y = int((rotated.y * scale + 1.0) * float(r.height) / 2.0)
-
-  result = (x: x, y: y, z: rotated.z)
+  let halfW = float(r.width) * 0.5
+  let halfH = float(r.height) * 0.5
+  (
+    x: int((rotated.x * scale + 1.0) * halfW),
+    y: int((rotated.y * scale + 1.0) * halfH),
+    z: rotated.z
+  )
 
 proc isInsideFrustum(r: Renderer, p: tuple[x, y: int, z: float]): bool =
   ## Frustum culling - check if projected point is within view bounds
@@ -116,16 +122,24 @@ proc triangleVisible(r: Renderer, p0, p1, p2: tuple[x, y: int, z: float]): bool 
   ## Check if at least one vertex is potentially visible
   r.isInsideFrustum(p0) or r.isInsideFrustum(p1) or r.isInsideFrustum(p2)
 
-import std/algorithm
-
 proc drawModel(r: Renderer, wireColor: Color) =
-  type FaceData = tuple[
-    face: Face,
+  # Minimal data needed for drawing after culling
+  type ProjectedFace = tuple[
     depth: float,
-    rv0, rv1, rv2: Vec3,  # Rotated vertices
-    p0, p1, p2: tuple[x, y: int, z: float]  # Projected points
+    p0, p1, p2: tuple[x, y: int, z: float]
   ]
-  var visibleFaces: seq[FaceData] = @[]
+  var visibleFaces: seq[ProjectedFace] = @[]
+
+  # Precompute trig for rotation (avoid recalculating per-vertex)
+  let cosY = cos(r.rotationY)
+  let sinY = sin(r.rotationY)
+  let cosX = cos(r.rotationX)
+  let sinX = sin(r.rotationX)
+
+  template rotateVert(v: Vec3): Vec3 =
+    # Inline combined Y then X rotation
+    let ry = vec3(v.x * cosY + v.z * sinY, v.y, -v.x * sinY + v.z * cosY)
+    vec3(ry.x, ry.y * cosX - ry.z * sinX, ry.y * sinX + ry.z * cosX)
 
   # First pass: transform, cull backfaces, cull frustum
   for face in r.model.faces:
@@ -133,44 +147,37 @@ proc drawModel(r: Renderer, wireColor: Color) =
     let v1 = r.model.vertices[face.i1]
     let v2 = r.model.vertices[face.i2]
 
-    # Rotate vertices
-    let rv0 = v0.rotateY(r.rotationY).rotateX(r.rotationX)
-    let rv1 = v1.rotateY(r.rotationY).rotateX(r.rotationX)
-    let rv2 = v2.rotateY(r.rotationY).rotateX(r.rotationX)
+    # Rotate vertices (using precomputed trig)
+    let rv0 = rotateVert(v0)
+    let rv1 = rotateVert(v1)
+    let rv2 = rotateVert(v2)
 
-    # Backface culling - compute face normal
-    let edge1 = rv1 - rv0
-    let edge2 = rv2 - rv0
-    let normal = cross(edge1, edge2)
+    # Backface culling - compute face normal (only need z component)
+    let edge1x = rv1.x - rv0.x
+    let edge1y = rv1.y - rv0.y
+    let edge2x = rv2.x - rv0.x
+    let edge2y = rv2.y - rv0.y
+    let normalZ = edge1x * edge2y - edge1y * edge2x
 
     # Skip back-facing triangles (normal pointing away from camera)
-    if normal.z >= 0:
+    if normalZ >= 0:
       continue
 
-    # Project vertices
-    let p0 = r.project(v0)
-    let p1 = r.project(v1)
-    let p2 = r.project(v2)
+    # Project already-rotated vertices
+    let p0 = r.projectRotated(rv0)
+    let p1 = r.projectRotated(rv1)
+    let p2 = r.projectRotated(rv2)
 
     # Frustum culling - skip if entirely outside view
     if not r.triangleVisible(p0, p1, p2):
       continue
 
-    # Store for depth sorting
-    let avgDepth = (rv0.z + rv1.z + rv2.z) / 3.0
-    visibleFaces.add((
-      face: face,
-      depth: avgDepth,
-      rv0: rv0, rv1: rv1, rv2: rv2,
-      p0: p0, p1: p1, p2: p2
-    ))
+    # Store only what's needed for drawing
+    let avgDepth = (rv0.z + rv1.z + rv2.z) * 0.333333
+    visibleFaces.add((depth: avgDepth, p0: p0, p1: p1, p2: p2))
 
   # Depth sort: painter's algorithm (back to front)
-  visibleFaces.sort(proc(a, b: FaceData): int =
-    if a.depth > b.depth: -1
-    elif a.depth < b.depth: 1
-    else: 0
-  )
+  visibleFaces.sort(proc(a, b: ProjectedFace): int = cmp(b.depth, a.depth))
 
   # Draw visible faces
   for fd in visibleFaces:
@@ -181,7 +188,7 @@ proc drawModel(r: Renderer, wireColor: Color) =
 proc render(r: Renderer) =
   r.clear()
   if r.model.vertices.len > 0:
-    r.drawModel(greenColor())
+    r.drawModel(wireColor)
 
   # Copy pixel data to canvas
   {.emit: [r.ctx, ".putImageData(", r.imageData, ", 0, 0);"].}
