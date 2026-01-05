@@ -23,8 +23,8 @@ type
     t: array[3, int]   # Texture coord indices
 
   Texture = ref object
-    width, height: int
-    data: seq[uint8]   # RGBA pixel data
+    width*, height*: int
+    jsData*: JsObject   # Keep data in JS for fast access
 
   Model = object
     vertices: seq[Vertex]
@@ -59,7 +59,7 @@ let lightDir = vec3(0.0, 0.5, -1.0).normalize()
 
 proc sampleTexture(tex: Texture, u, v: float): Color =
   ## Sample texture at UV coordinates with clamping
-  if tex == nil or tex.data.len == 0:
+  if tex == nil or tex.jsData == nil:
     return createColor(200, 200, 200)  # Default gray if no texture
 
   # Clamp UV to [0, 1]
@@ -71,10 +71,14 @@ proc sampleTexture(tex: Texture, u, v: float): Color =
   let py = int((1.0 - vc) * float(tex.height - 1))
 
   let idx = (py * tex.width + px) * 4
-  if idx >= 0 and idx + 3 < tex.data.len:
-    createColor(tex.data[idx], tex.data[idx + 1], tex.data[idx + 2], tex.data[idx + 3])
-  else:
-    createColor(200, 200, 200)
+
+  # Sample directly from JS data array (fast path)
+  var r, g, b, a: int
+  {.emit: [r, " = ", tex.jsData, ".data[", idx, "] || 200;"].}
+  {.emit: [g, " = ", tex.jsData, ".data[", idx, " + 1] || 200;"].}
+  {.emit: [b, " = ", tex.jsData, ".data[", idx, " + 2] || 200;"].}
+  {.emit: [a, " = ", tex.jsData, ".data[", idx, " + 3] || 255;"].}
+  createColor(uint8(r), uint8(g), uint8(b), uint8(a))
 
 proc setPixel(r: Renderer, x, y: int, c: Color) =
   if x < 0 or x >= r.width or y < 0 or y >= r.height:
@@ -398,17 +402,11 @@ proc loadTexture(url: string): Future[JsObject] =
   result = promise
 
 proc jsTextureToNim(jsObj: JsObject): Texture =
-  ## Convert JS texture object to Nim Texture
+  ## Convert JS texture object to Nim Texture - store reference only
   result = Texture()
   {.emit: [result, ".width = ", jsObj, ".width;"].}
   {.emit: [result, ".height = ", jsObj, ".height;"].}
-  var dataLen: int
-  {.emit: [dataLen, " = ", jsObj, ".data.length;"].}
-  result.data = newSeq[uint8](dataLen)
-  for i in 0..<dataLen:
-    var val: int
-    {.emit: [val, " = ", jsObj, ".data[", i, "];"].}
-    result.data[i] = uint8(val)
+  result.jsData = jsObj  # Store JS reference, no copying!
 
 proc animate(timestamp: float) {.exportc.} =
   if renderer.autoRotate and not renderer.dragging:
