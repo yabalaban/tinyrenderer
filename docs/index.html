@@ -133,9 +133,9 @@
     </div>
 
     <div class="controls">
-      <select id="modelSelect" onchange="selectModel(this.value)">
-        <option value="models/african_head.obj">African Head</option>
-        <option value="models/diablo3_pose.obj">Diablo 3 Pose</option>
+      <select id="modelSelect" onchange="loadSelectedModel()">
+        <option value="african_head" data-model="models/african_head.obj" data-texture="models/african_head_diffuse.png">African Head</option>
+        <option value="diablo3_pose" data-model="models/diablo3_pose.obj" data-texture="models/diablo3_pose_diffuse.png">Diablo 3 Pose</option>
       </select>
       <button id="autoRotateBtn" onclick="toggleAutoRotate()">Auto-Rotate: ON</button>
       <button onclick="clearCacheAndReload()" style="border-color: #ff6b6b55; color: #ff6b6b;">↻ Clear Cache</button>
@@ -156,6 +156,15 @@
   </div>
 
   <script>
+    // Load model from select dropdown
+    function loadSelectedModel() {
+      const select = document.getElementById('modelSelect');
+      const option = select.options[select.selectedIndex];
+      const modelUrl = option.getAttribute('data-model');
+      const textureUrl = option.getAttribute('data-texture');
+      selectModel(modelUrl, textureUrl);
+    }
+
     // Cache-busting: add timestamp to script URL
     function clearCacheAndReload() {
       // Clear caches if available
