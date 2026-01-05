@@ -40,9 +40,10 @@ proc createColor(r, g, b: uint8, a: uint8 = 255): Color {.inline.} =
   Color(r: r, g: g, b: b, a: a)
 
 # Cached color constants
-let
-  bgColor = createColor(20, 20, 30)
-  wireColor = createColor(0, 255, 100)
+let bgColor = createColor(20, 20, 30)
+
+# Light direction (normalized, pointing towards top-right-front)
+let lightDir = vec3(0.0, 0.0, -1.0).normalize()
 
 proc setPixel(r: Renderer, x, y: int, c: Color) =
   if x < 0 or x >= r.width or y < 0 or y >= r.height:
@@ -98,6 +99,42 @@ proc drawLine(r: Renderer, x0, y0, x1, y1: int, c: Color) =
       y += yStep
       error -= dx * 2
 
+proc drawFilledTriangle(r: Renderer, x0, y0, x1, y1, x2, y2: int, c: Color) =
+  ## Scanline triangle rasterization
+  var pts = [(x: x0, y: y0), (x: x1, y: y1), (x: x2, y: y2)]
+
+  # Sort vertices by y coordinate
+  if pts[0].y > pts[1].y: swap(pts[0], pts[1])
+  if pts[0].y > pts[2].y: swap(pts[0], pts[2])
+  if pts[1].y > pts[2].y: swap(pts[1], pts[2])
+
+  let totalHeight = pts[2].y - pts[0].y
+  if totalHeight == 0: return
+
+  # Draw both halves of triangle
+  for i in 0..<totalHeight:
+    let secondHalf = i > pts[1].y - pts[0].y or pts[1].y == pts[0].y
+    let segmentHeight = if secondHalf: pts[2].y - pts[1].y else: pts[1].y - pts[0].y
+    if segmentHeight == 0: continue
+
+    let alpha = float(i) / float(totalHeight)
+    let beta = if secondHalf:
+      float(i - (pts[1].y - pts[0].y)) / float(segmentHeight)
+    else:
+      float(i) / float(segmentHeight)
+
+    var ax = pts[0].x + int(float(pts[2].x - pts[0].x) * alpha)
+    var bx = if secondHalf:
+      pts[1].x + int(float(pts[2].x - pts[1].x) * beta)
+    else:
+      pts[0].x + int(float(pts[1].x - pts[0].x) * beta)
+
+    if ax > bx: swap(ax, bx)
+
+    let y = pts[0].y + i
+    for x in ax..bx:
+      r.setPixel(x, y, c)
+
 proc projectRotated(r: Renderer, rotated: Vec3): tuple[x, y: int, z: float] {.inline.} =
   ## Project already-rotated vertex to screen coordinates
   const fov = 2.0
@@ -122,10 +159,11 @@ proc triangleVisible(r: Renderer, p0, p1, p2: tuple[x, y: int, z: float]): bool 
   ## Check if at least one vertex is potentially visible
   r.isInsideFrustum(p0) or r.isInsideFrustum(p1) or r.isInsideFrustum(p2)
 
-proc drawModel(r: Renderer, wireColor: Color) =
-  # Minimal data needed for drawing after culling
+proc drawModel(r: Renderer) =
+  # Data needed for drawing after culling
   type ProjectedFace = tuple[
     depth: float,
+    intensity: float,  # Lighting intensity
     p0, p1, p2: tuple[x, y: int, z: float]
   ]
   var visibleFaces: seq[ProjectedFace] = @[]
@@ -141,7 +179,7 @@ proc drawModel(r: Renderer, wireColor: Color) =
     let ry = vec3(v.x * cosY + v.z * sinY, v.y, -v.x * sinY + v.z * cosY)
     vec3(ry.x, ry.y * cosX - ry.z * sinX, ry.y * sinX + ry.z * cosX)
 
-  # First pass: transform, cull backfaces, cull frustum
+  # First pass: transform, cull backfaces, compute lighting, cull frustum
   for face in r.model.faces:
     let v0 = r.model.vertices[face.i0]
     let v1 = r.model.vertices[face.i1]
@@ -152,15 +190,22 @@ proc drawModel(r: Renderer, wireColor: Color) =
     let rv1 = rotateVert(v1)
     let rv2 = rotateVert(v2)
 
-    # Backface culling - compute face normal (only need z component)
-    let edge1x = rv1.x - rv0.x
-    let edge1y = rv1.y - rv0.y
-    let edge2x = rv2.x - rv0.x
-    let edge2y = rv2.y - rv0.y
-    let normalZ = edge1x * edge2y - edge1y * edge2x
+    # Compute full 3D face normal for lighting
+    let edge1 = rv1 - rv0
+    let edge2 = rv2 - rv0
+    let normal = cross(edge1, edge2).normalize()
 
-    # Skip back-facing triangles (normal pointing away from camera)
-    if normalZ >= 0:
+    # Backface culling - camera looks down -Z axis
+    # Front faces have normals pointing towards camera (negative z)
+    if normal.z > 0:
+      continue
+
+    # Compute lighting intensity (dot product with light direction)
+    # Light comes from -Z, so we use -normal.z as base intensity
+    let intensity = max(0.0, -dot(normal, lightDir))
+
+    # Skip completely dark faces
+    if intensity <= 0:
       continue
 
     # Project already-rotated vertices
@@ -172,23 +217,31 @@ proc drawModel(r: Renderer, wireColor: Color) =
     if not r.triangleVisible(p0, p1, p2):
       continue
 
-    # Store only what's needed for drawing
+    # Store for depth sorting
     let avgDepth = (rv0.z + rv1.z + rv2.z) * 0.333333
-    visibleFaces.add((depth: avgDepth, p0: p0, p1: p1, p2: p2))
+    visibleFaces.add((depth: avgDepth, intensity: intensity, p0: p0, p1: p1, p2: p2))
 
-  # Depth sort: painter's algorithm (back to front)
+  # Depth sort: painter's algorithm (back to front, furthest first)
   visibleFaces.sort(proc(a, b: ProjectedFace): int = cmp(b.depth, a.depth))
 
-  # Draw visible faces
+  # Draw visible faces with flat shading
   for fd in visibleFaces:
-    r.drawLine(fd.p0.x, fd.p0.y, fd.p1.x, fd.p1.y, wireColor)
-    r.drawLine(fd.p1.x, fd.p1.y, fd.p2.x, fd.p2.y, wireColor)
-    r.drawLine(fd.p2.x, fd.p2.y, fd.p0.x, fd.p0.y, wireColor)
+    # Compute color based on lighting intensity
+    let shade = uint8(min(255.0, fd.intensity * 255.0))
+    let faceColor = createColor(shade, shade, shade)
+
+    # Draw filled triangle
+    r.drawFilledTriangle(
+      fd.p0.x, fd.p0.y,
+      fd.p1.x, fd.p1.y,
+      fd.p2.x, fd.p2.y,
+      faceColor
+    )
 
 proc render(r: Renderer) =
   r.clear()
   if r.model.vertices.len > 0:
-    r.drawModel(wireColor)
+    r.drawModel()
 
   # Copy pixel data to canvas
   {.emit: [r.ctx, ".putImageData(", r.imageData, ", 0, 0);"].}
