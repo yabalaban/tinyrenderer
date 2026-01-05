@@ -57,9 +57,17 @@ let bgColor = createColor(20, 20, 30)
 # Camera at z=0 looking towards +Z, so light from front means negative Z
 let lightDir = vec3(0.0, 0.5, -1.0).normalize()
 
+var sampleDebugCount = 0
+
 proc sampleTexture(tex: Texture, u, v: float): Color =
   ## Sample texture at UV coordinates with clamping
-  if tex == nil or tex.jsData == nil:
+  var hasData: bool
+  {.emit: [hasData, " = !!", tex, " && !!", tex, ".jsData && !!", tex, ".jsData.data;"].}
+
+  if not hasData:
+    sampleDebugCount += 1
+    if sampleDebugCount < 5:
+      {.emit: ["console.log('No texture data!', ", tex, ");"].}
     return createColor(200, 200, 200)  # Default gray if no texture
 
   # Clamp UV to [0, 1]
@@ -74,10 +82,10 @@ proc sampleTexture(tex: Texture, u, v: float): Color =
 
   # Sample directly from JS data array (fast path)
   var r, g, b, a: int
-  {.emit: [r, " = ", tex.jsData, ".data[", idx, "] || 200;"].}
-  {.emit: [g, " = ", tex.jsData, ".data[", idx, " + 1] || 200;"].}
-  {.emit: [b, " = ", tex.jsData, ".data[", idx, " + 2] || 200;"].}
-  {.emit: [a, " = ", tex.jsData, ".data[", idx, " + 3] || 255;"].}
+  {.emit: [r, " = ", tex, ".jsData.data[", idx, "] || 0;"].}
+  {.emit: [g, " = ", tex, ".jsData.data[", idx, " + 1] || 0;"].}
+  {.emit: [b, " = ", tex, ".jsData.data[", idx, " + 2] || 0;"].}
+  {.emit: [a, " = ", tex, ".jsData.data[", idx, " + 3] || 255;"].}
   createColor(uint8(r), uint8(g), uint8(b), uint8(a))
 
 proc setPixel(r: Renderer, x, y: int, c: Color) =
@@ -406,7 +414,8 @@ proc jsTextureToNim(jsObj: JsObject): Texture =
   result = Texture()
   {.emit: [result, ".width = ", jsObj, ".width;"].}
   {.emit: [result, ".height = ", jsObj, ".height;"].}
-  result.jsData = jsObj  # Store JS reference, no copying!
+  {.emit: [result, ".jsData = ", jsObj, ";"].}
+  {.emit: ["console.log('Texture loaded:', ", result, ".width, 'x', ", result, ".height, 'data length:', ", jsObj, ".data.length);"].}
 
 proc animate(timestamp: float) {.exportc.} =
   if renderer.autoRotate and not renderer.dragging:
