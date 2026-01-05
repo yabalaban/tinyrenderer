@@ -42,9 +42,9 @@ proc createColor(r, g, b: uint8, a: uint8 = 255): Color {.inline.} =
 # Cached color constants
 let bgColor = createColor(20, 20, 30)
 
-# Light direction (normalized, coming from upper-front-right towards origin)
-# This means light rays travel in the -lightDir direction
-let lightDir = vec3(0.2, 0.3, 1.0).normalize()
+# Light direction (normalized vector pointing FROM the light source)
+# Camera at z=0 looking towards +Z, so light from front means negative Z
+let lightDir = vec3(0.0, 0.5, -1.0).normalize()
 
 proc setPixel(r: Renderer, x, y: int, c: Color) =
   if x < 0 or x >= r.width or y < 0 or y >= r.height:
@@ -196,13 +196,15 @@ proc drawModel(r: Renderer) =
     let edge2 = rv2 - rv0
     let normal = cross(edge1, edge2).normalize()
 
-    # Backface culling - camera looks down -Z axis (from +Z towards -Z)
-    # Front faces (CCW winding in OBJ) have normals pointing towards camera (+Z)
-    if normal.z < 0:
+    # Backface culling - camera at z=0 looking towards +Z
+    # Front faces have normals pointing TOWARDS camera, i.e., towards -Z
+    # So front faces have normal.z < 0
+    if normal.z > 0:
       continue
 
     # Compute lighting intensity
-    # dot(normal, lightDir) is positive when face points towards light
+    # For front-facing triangles, normal points towards -Z
+    # lightDir also points towards -Z, so dot product is positive
     let intensity = max(0.1, dot(normal, lightDir))  # 0.1 ambient minimum
 
     # Project already-rotated vertices
