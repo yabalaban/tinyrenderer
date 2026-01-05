@@ -1,0 +1,4 @@
+--backend:js
+--define:release
+--opt:speed
+--outdir:"../../../docs"
