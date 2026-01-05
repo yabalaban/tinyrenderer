@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>TinyRenderer - Software 3D Renderer in Nim</title>
+  <title>TinyRenderer</title>
   <style>
     * {
       margin: 0;
@@ -12,148 +12,216 @@
     }
 
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
-      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+      background: #0a0a0b;
       min-height: 100vh;
-      color: #e0e0e0;
+      color: #fff;
       display: flex;
       flex-direction: column;
       align-items: center;
-      padding: 20px;
+      justify-content: center;
+      padding: 40px 20px;
+      overflow-x: hidden;
+    }
+
+    .hero {
+      text-align: center;
+      margin-bottom: 32px;
     }
 
     h1 {
-      font-size: 2rem;
-      margin-bottom: 10px;
-      background: linear-gradient(90deg, #00ff88, #00d4ff);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
+      font-size: 1.1rem;
+      font-weight: 500;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: #fff;
+      margin-bottom: 8px;
     }
 
-    .subtitle {
-      color: #888;
-      margin-bottom: 20px;
-      font-size: 0.9rem;
+    .tagline {
+      font-size: 0.75rem;
+      color: #666;
+      letter-spacing: 0.05em;
     }
 
-    .container {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 15px;
+    .viewer {
+      position: relative;
     }
 
-    .canvas-wrapper {
-      border: 2px solid #00ff8855;
-      border-radius: 8px;
+    .canvas-frame {
+      position: relative;
+      border-radius: 12px;
       overflow: hidden;
-      box-shadow: 0 0 30px rgba(0, 255, 136, 0.2);
+      box-shadow:
+        0 0 0 1px rgba(255,255,255,0.05),
+        0 20px 50px -10px rgba(0,0,0,0.5);
     }
 
     #canvas {
       display: block;
       cursor: grab;
+      background: #0d0d0e;
     }
 
     #canvas:active {
       cursor: grabbing;
     }
 
+    .overlay {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      padding: 16px 20px;
+      background: linear-gradient(transparent, rgba(0,0,0,0.8));
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+
+    .viewer:hover .overlay {
+      opacity: 1;
+    }
+
+    .stats {
+      font-size: 0.7rem;
+      color: rgba(255,255,255,0.5);
+      font-family: 'SF Mono', ui-monospace, monospace;
+    }
+
     .controls {
       display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
-      justify-content: center;
+      gap: 8px;
     }
 
-    select, button {
-      padding: 10px 20px;
-      font-size: 14px;
-      border: 1px solid #00ff8855;
-      border-radius: 5px;
-      background: #1a1a2e;
-      color: #00ff88;
+    button {
+      padding: 6px 12px;
+      font-size: 0.7rem;
+      font-weight: 500;
+      letter-spacing: 0.02em;
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 6px;
+      background: rgba(255,255,255,0.05);
+      color: rgba(255,255,255,0.8);
       cursor: pointer;
       transition: all 0.2s ease;
+      font-family: inherit;
     }
 
-    select:hover, button:hover {
-      background: #00ff8822;
-      box-shadow: 0 0 10px rgba(0, 255, 136, 0.3);
+    button:hover {
+      background: rgba(255,255,255,0.1);
+      border-color: rgba(255,255,255,0.25);
+      color: #fff;
     }
 
-    select:focus, button:focus {
-      outline: none;
-      border-color: #00ff88;
+    button.active {
+      background: rgba(255,255,255,0.9);
+      color: #0a0a0b;
+      border-color: transparent;
     }
 
-    #status {
-      font-size: 0.85rem;
-      color: #00d4ff;
-      min-height: 20px;
-    }
-
-    .info {
-      max-width: 600px;
+    .footer {
+      margin-top: 32px;
       text-align: center;
-      font-size: 0.85rem;
-      color: #666;
-      margin-top: 20px;
-      line-height: 1.6;
     }
 
-    .info a {
-      color: #00ff88;
+    .tech {
+      display: flex;
+      gap: 24px;
+      justify-content: center;
+      margin-bottom: 16px;
+    }
+
+    .tech span {
+      font-size: 0.65rem;
+      color: #444;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+    }
+
+    .links {
+      font-size: 0.7rem;
+    }
+
+    .links a {
+      color: #555;
       text-decoration: none;
+      transition: color 0.2s;
     }
 
-    .info a:hover {
-      text-decoration: underline;
+    .links a:hover {
+      color: #888;
     }
 
-    .tech-badge {
-      display: inline-block;
-      padding: 3px 8px;
-      background: #00ff8822;
-      border-radius: 3px;
-      font-size: 0.75rem;
-      color: #00ff88;
-      margin: 0 2px;
+    #buildInfo {
+      position: fixed;
+      bottom: 12px;
+      right: 12px;
+      font-size: 0.6rem;
+      color: #333;
+      font-family: 'SF Mono', ui-monospace, monospace;
+    }
+
+    @media (max-width: 640px) {
+      body {
+        padding: 20px;
+        justify-content: flex-start;
+        padding-top: 40px;
+      }
+
+      .overlay {
+        opacity: 1;
+        background: transparent;
+        position: relative;
+        padding: 12px 0;
+        flex-direction: column;
+        gap: 8px;
+        align-items: center;
+      }
     }
   </style>
 </head>
 <body>
-  <h1>TinyRenderer</h1>
-  <p class="subtitle">Software 3D Renderer compiled from <span class="tech-badge">Nim</span> to <span class="tech-badge">JavaScript</span></p>
+  <div class="hero">
+    <h1>TinyRenderer</h1>
+    <p class="tagline">Software rasterizer · No WebGL · Pure pixels</p>
+  </div>
 
-  <div class="container">
-    <div class="canvas-wrapper">
+  <div class="viewer">
+    <div class="canvas-frame">
       <canvas id="canvas"></canvas>
     </div>
-
-    <div class="controls">
-      <button id="autoRotateBtn" onclick="toggleAutoRotate()">Auto-Rotate: ON</button>
+    <div class="overlay">
+      <div class="stats" id="status">Loading...</div>
+      <div class="controls">
+        <button id="autoRotateBtn" class="active" onclick="toggleAutoRotate()">Rotate</button>
+      </div>
     </div>
-
-    <div id="status">Loading...</div>
-    <div id="buildInfo" style="font-size: 0.7rem; color: #555; margin-top: 10px;"></div>
   </div>
 
-  <div class="info">
-    <p>
-      This is a software renderer running entirely in your browser.
-      No WebGL - just pixel-by-pixel rendering on a 2D canvas.
-      The Nim source code is compiled to JavaScript.
-    </p>
-    <p style="margin-top: 10px;">
-      <a href="https://github.com/ssloy/tinyrenderer" target="_blank">Based on tinyrenderer</a>
-    </p>
+  <div class="footer">
+    <div class="tech">
+      <span>Nim → JavaScript</span>
+      <span>Scanline rasterization</span>
+      <span>Texture mapping</span>
+    </div>
+    <div class="links">
+      <a href="https://github.com/ssloy/tinyrenderer" target="_blank">Based on tinyrenderer by ssloy</a>
+    </div>
   </div>
+
+  <div id="buildInfo"></div>
 
   <script>
-    // No additional JS needed - renderer handles everything
+    // Toggle button style
+    const origToggle = window.toggleAutoRotate;
+    window.toggleAutoRotate = function() {
+      origToggle && origToggle();
+      document.getElementById('autoRotateBtn').classList.toggle('active');
+    };
   </script>
-  <script src="renderer.js?v=1767656827"></script>
+  <script src="renderer.js?v=1767657500"></script>
 </body>
 </html>
