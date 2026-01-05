@@ -537,9 +537,16 @@ proc toggleAutoRotate() {.exportc.} =
   else:
     btn.innerHTML = cstring("Auto-Rotate: OFF")
 
+const buildTimestamp = CompileDate & " " & CompileTime
+
 proc main() {.exportc.} =
   renderer = initRenderer("canvas", 600, 600)
   renderer.setupEventHandlers()
+
+  # Show build timestamp
+  let buildInfo = document.getElementById("buildInfo")
+  if not buildInfo.isNil:
+    buildInfo.innerHTML = cstring("Build: " & buildTimestamp)
 
   # Load default model with texture
   selectModel(
