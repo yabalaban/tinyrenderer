@@ -11,9 +11,6 @@ proc text*(r: Response): Future[cstring] {.importjs: "#.text()".}
 proc fetch*(url: cstring): Future[Response] {.importjs: "fetch(#)".}
 
 type
-  Color = object
-    r, g, b, a: uint8
-
   UV = tuple[u, v: float]
 
   Vertex = Vec3
@@ -47,92 +44,17 @@ type
 
 var renderer: Renderer
 
-proc createColor(r, g, b: uint8, a: uint8 = 255): Color {.inline.} =
-  Color(r: r, g: g, b: b, a: a)
-
-# Cached color constants
-let bgColor = createColor(20, 20, 30)
-
 # Light direction (normalized vector pointing FROM the light source)
 # Camera at z=0 looking towards +Z, so light from front means negative Z
 let lightDir = vec3(0.0, 0.5, -1.0).normalize()
 
-proc sampleTexture(tex: Texture, u, v: float): Color =
-  ## Sample texture at UV coordinates with clamping
-  if tex == nil or tex.jsData == nil:
-    return createColor(200, 200, 200)  # Default gray if no texture
-
-  # Clamp UV to [0, 1]
-  let uc = clamp(u, 0.0, 1.0)
-  let vc = clamp(v, 0.0, 1.0)
-
-  # Convert to pixel coordinates (flip V for texture space)
-  let px = int(uc * float(tex.width - 1))
-  let py = int((1.0 - vc) * float(tex.height - 1))
-
-  let idx = (py * tex.width + px) * 4
-
-  # Sample directly from JS data array (fast path)
-  var r, g, b, a: int
-  {.emit: [r, " = ", tex.jsData, ".data[", idx, "] || 200;"].}
-  {.emit: [g, " = ", tex.jsData, ".data[", idx, " + 1] || 200;"].}
-  {.emit: [b, " = ", tex.jsData, ".data[", idx, " + 2] || 200;"].}
-  {.emit: [a, " = ", tex.jsData, ".data[", idx, " + 3] || 255;"].}
-  createColor(uint8(r), uint8(g), uint8(b), uint8(a))
-
-proc setPixel(r: Renderer, x, y: int, c: Color) =
-  if x < 0 or x >= r.width or y < 0 or y >= r.height:
-    return
-  # Flip Y for canvas (0,0 is top-left)
-  let flippedY = r.height - 1 - y
-  let idx = (flippedY * r.width + x) * 4
-  r.pixels[idx] = c.r.int
-  r.pixels[idx + 1] = c.g.int
-  r.pixels[idx + 2] = c.b.int
-  r.pixels[idx + 3] = c.a.int
-
-proc clear(r: Renderer) =
-  # Direct buffer fill - much faster than per-pixel setPixel calls
-  let totalPixels = r.width * r.height
-  var idx = 0
-  for i in 0..<totalPixels:
-    r.pixels[idx] = bgColor.r.int
-    r.pixels[idx + 1] = bgColor.g.int
-    r.pixels[idx + 2] = bgColor.b.int
-    r.pixels[idx + 3] = bgColor.a.int
-    idx += 4
-
-proc drawLine(r: Renderer, x0, y0, x1, y1: int, c: Color) =
-  var x0 = x0
-  var y0 = y0
-  var x1 = x1
-  var y1 = y1
-  var steep = false
-
-  if abs(x0 - x1) < abs(y0 - y1):
-    swap(x0, y0)
-    swap(x1, y1)
-    steep = true
-
-  if x0 > x1:
-    swap(x0, x1)
-    swap(y0, y1)
-
-  let dx = x1 - x0
-  let dy = abs(y1 - y0)
-  var error = 0
-  var y = y0
-  let yStep = if y1 > y0: 1 else: -1
-
-  for x in x0..x1:
-    if steep:
-      r.setPixel(y, x, c)
-    else:
-      r.setPixel(x, y, c)
-    error += dy * 2
-    if error > dx:
-      y += yStep
-      error -= dx * 2
+proc clear(r: Renderer) {.inline.} =
+  # Use JS typed array operations for fast clear
+  {.emit: ["""
+    const p = """, r.pixels, """;
+    const len = p.length;
+    for(let i=0; i<len; i+=4) { p[i]=20; p[i+1]=20; p[i+2]=30; p[i+3]=255; }
+  """].}
 
 proc drawTexturedTriangle(r: Renderer,
     x0, y0: int, u0, v0: float,
@@ -140,71 +62,92 @@ proc drawTexturedTriangle(r: Renderer,
     x2, y2: int, u2, v2: float,
     intensity: float) =
   ## Scanline triangle rasterization with texture interpolation
-  type VertexData = tuple[x, y: int, u, v: float]
-  var pts: array[3, VertexData] = [
-    (x: x0, y: y0, u: u0, v: v0),
-    (x: x1, y: y1, u: u1, v: v1),
-    (x: x2, y: y2, u: u2, v: v2)
-  ]
+  # Sort vertices by y coordinate using local vars (avoid tuple overhead)
+  var py0, py1, py2 = y0
+  var px0, px1, px2 = x0
+  var pu0, pu1, pu2 = u0
+  var pv0, pv1, pv2 = v0
+  py1 = y1; px1 = x1; pu1 = u1; pv1 = v1
+  py2 = y2; px2 = x2; pu2 = u2; pv2 = v2
 
-  # Sort vertices by y coordinate
-  if pts[0].y > pts[1].y: swap(pts[0], pts[1])
-  if pts[0].y > pts[2].y: swap(pts[0], pts[2])
-  if pts[1].y > pts[2].y: swap(pts[1], pts[2])
+  if py0 > py1: swap(py0, py1); swap(px0, px1); swap(pu0, pu1); swap(pv0, pv1)
+  if py0 > py2: swap(py0, py2); swap(px0, px2); swap(pu0, pu2); swap(pv0, pv2)
+  if py1 > py2: swap(py1, py2); swap(px1, px2); swap(pu1, pu2); swap(pv1, pv2)
 
-  let totalHeight = pts[2].y - pts[0].y
+  let totalHeight = py2 - py0
   if totalHeight == 0: return
+
+  let width = r.width
+  let height = r.height
+  let tex = r.texture
+  let texW = tex.width - 1
+  let texH = tex.height - 1
+  let texWidth = tex.width
 
   # Draw both halves of triangle
   for i in 0..<totalHeight:
-    let secondHalf = i > pts[1].y - pts[0].y or pts[1].y == pts[0].y
-    let segmentHeight = if secondHalf: pts[2].y - pts[1].y else: pts[1].y - pts[0].y
+    let secondHalf = i > py1 - py0 or py1 == py0
+    let segmentHeight = if secondHalf: py2 - py1 else: py1 - py0
     if segmentHeight == 0: continue
 
     let alpha = float(i) / float(totalHeight)
     let beta = if secondHalf:
-      float(i - (pts[1].y - pts[0].y)) / float(segmentHeight)
+      float(i - (py1 - py0)) / float(segmentHeight)
     else:
       float(i) / float(segmentHeight)
 
     # Interpolate x and UV along edges
-    var ax = float(pts[0].x) + float(pts[2].x - pts[0].x) * alpha
-    var au = pts[0].u + (pts[2].u - pts[0].u) * alpha
-    var av = pts[0].v + (pts[2].v - pts[0].v) * alpha
+    var ax = float(px0) + float(px2 - px0) * alpha
+    var au = pu0 + (pu2 - pu0) * alpha
+    var av = pv0 + (pv2 - pv0) * alpha
 
     var bx, bu, bv: float
     if secondHalf:
-      bx = float(pts[1].x) + float(pts[2].x - pts[1].x) * beta
-      bu = pts[1].u + (pts[2].u - pts[1].u) * beta
-      bv = pts[1].v + (pts[2].v - pts[1].v) * beta
+      bx = float(px1) + float(px2 - px1) * beta
+      bu = pu1 + (pu2 - pu1) * beta
+      bv = pv1 + (pv2 - pv1) * beta
     else:
-      bx = float(pts[0].x) + float(pts[1].x - pts[0].x) * beta
-      bu = pts[0].u + (pts[1].u - pts[0].u) * beta
-      bv = pts[0].v + (pts[1].v - pts[0].v) * beta
+      bx = float(px0) + float(px1 - px0) * beta
+      bu = pu0 + (pu1 - pu0) * beta
+      bv = pv0 + (pv1 - pv0) * beta
 
     if ax > bx:
       swap(ax, bx)
       swap(au, bu)
       swap(av, bv)
 
-    let y = pts[0].y + i
-    let iax = int(ax)
-    let ibx = int(bx)
-    let spanWidth = bx - ax
+    let y = py0 + i
+    if y < 0 or y >= height: continue
 
+    let iax = max(0, int(ax))
+    let ibx = min(width - 1, int(bx))
+    if iax > ibx: continue
+
+    let spanWidth = bx - ax
+    let invSpan = if spanWidth > 0.001: 1.0 / spanWidth else: 0.0
+    let flippedY = height - 1 - y
+    var baseIdx = (flippedY * width + iax) * 4
+
+    # Inner loop - most critical for performance
     for x in iax..ibx:
-      # Interpolate UV across scanline
-      let t = if spanWidth > 0.001: (float(x) - ax) / spanWidth else: 0.0
+      let t = (float(x) - ax) * invSpan
       let u = au + (bu - au) * t
       let v = av + (bv - av) * t
 
-      # Sample texture and apply lighting
-      var texColor = r.texture.sampleTexture(u, v)
-      texColor.r = uint8(min(255.0, float(texColor.r) * intensity))
-      texColor.g = uint8(min(255.0, float(texColor.g) * intensity))
-      texColor.b = uint8(min(255.0, float(texColor.b) * intensity))
+      # Inline texture sample and pixel write
+      let tpx = int(clamp(u, 0.0, 1.0) * float(texW))
+      let tpy = int((1.0 - clamp(v, 0.0, 1.0)) * float(texH))
+      let tidx = (tpy * texWidth + tpx) * 4
 
-      r.setPixel(x, y, texColor)
+      var tr, tg, tb: int
+      {.emit: ["var td=", tex, ".jsData.data;", tr, "=td[", tidx, "];", tg, "=td[", tidx, "+1];", tb, "=td[", tidx, "+2];"].}
+
+      # Apply lighting and write pixel directly
+      {.emit: [r.pixels, "[", baseIdx, "]=", tr, "*", intensity, "|0;"].}
+      {.emit: [r.pixels, "[", baseIdx, "+1]=", tg, "*", intensity, "|0;"].}
+      {.emit: [r.pixels, "[", baseIdx, "+2]=", tb, "*", intensity, "|0;"].}
+      {.emit: [r.pixels, "[", baseIdx, "+3]=255;"].}
+      baseIdx += 4
 
 proc projectRotated(r: Renderer, rotated: Vec3): tuple[x, y: int, z: float] {.inline.} =
   ## Project already-rotated vertex to screen coordinates
@@ -319,7 +262,9 @@ proc drawModel(r: Renderer) =
 
 proc render(r: Renderer) =
   r.clear()
-  if r.model.vertices.len > 0:
+  var hasTexture: bool
+  {.emit: [hasTexture, " = !!", r.texture, " && !!", r.texture, ".jsData && !!", r.texture, ".jsData.data;"].}
+  if r.model.vertices.len > 0 and hasTexture:
     r.drawModel()
 
   # Copy pixel data to canvas
@@ -377,10 +322,11 @@ proc loadModel(url: string): Future[Model] {.async.} =
   let text = await response.text()
   result = parseObjContent($text)
 
-proc loadTexture(url: string): Future[JsObject] =
+proc loadTexture(url: cstring): Future[JsObject] =
   ## Load texture from image URL using JavaScript Image API
   var promise: Future[JsObject]
-  {.emit: [promise, """ = new Promise((resolve, reject) => {
+  {.emit: [promise, " = new Promise((resolve, reject) => {", """
+    const urlStr = """, url, """;
     const img = new Image();
     img.crossOrigin = 'anonymous';
     img.onload = () => {
@@ -390,23 +336,17 @@ proc loadTexture(url: string): Future[JsObject] =
       const ctx = canvas.getContext('2d');
       ctx.drawImage(img, 0, 0);
       const imageData = ctx.getImageData(0, 0, img.width, img.height);
-      resolve({
-        width: img.width,
-        height: img.height,
-        data: Array.from(imageData.data)
-      });
+      resolve({ width: img.width, height: img.height, data: imageData.data });
     };
-    img.onerror = () => resolve({ width: 1, height: 1, data: [200, 200, 200, 255] });
-    img.src = """, url, """;
+    img.onerror = () => resolve({ width: 1, height: 1, data: new Uint8ClampedArray([128,128,128,255]) });
+    img.src = urlStr;
   });"""].}
   result = promise
 
 proc jsTextureToNim(jsObj: JsObject): Texture =
   ## Convert JS texture object to Nim Texture - store reference only
   result = Texture()
-  {.emit: [result, ".width = ", jsObj, ".width;"].}
-  {.emit: [result, ".height = ", jsObj, ".height;"].}
-  result.jsData = jsObj  # Store JS reference, no copying!
+  {.emit: [result, ".width=", jsObj, ".width;", result, ".height=", jsObj, ".height;", result, ".jsData=", jsObj, ";"].}
 
 proc animate(timestamp: float) {.exportc.} =
   if renderer.autoRotate and not renderer.dragging:
@@ -502,7 +442,7 @@ proc selectModel(modelUrl: cstring, textureUrl: cstring) {.exportc.} =
     statusEl.innerHTML = cstring("Loading texture...")
 
     # Load texture
-    let texJs = await loadTexture($textureUrl)
+    let texJs = await loadTexture(textureUrl)
     renderer.texture = jsTextureToNim(texJs)
 
     statusEl.innerHTML = cstring("Vertices: " & $renderer.model.vertices.len &
@@ -519,14 +459,21 @@ proc toggleAutoRotate() {.exportc.} =
   else:
     btn.innerHTML = cstring("Auto-Rotate: OFF")
 
+const buildTimestamp = CompileDate & " " & CompileTime
+
 proc main() {.exportc.} =
   renderer = initRenderer("canvas", 600, 600)
   renderer.setupEventHandlers()
 
+  # Show build timestamp
+  let buildInfo = document.getElementById("buildInfo")
+  if not buildInfo.isNil:
+    buildInfo.innerHTML = cstring("Build: " & buildTimestamp)
+
   # Load default model with texture
   selectModel(
-    cstring("models/african_head.obj"),
-    cstring("models/african_head_diffuse.png")
+    cstring("models/diablo3_pose.obj"),
+    cstring("models/diablo3_pose_diffuse.png")
   )
 
   # Start animation loop
