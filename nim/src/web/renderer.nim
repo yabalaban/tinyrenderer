@@ -389,22 +389,30 @@ proc loadTexture(url: string): Future[JsObject] =
   ## Load texture from image URL using JavaScript Image API
   var promise: Future[JsObject]
   {.emit: [promise, """ = new Promise((resolve, reject) => {
+    console.log('Starting to load texture from:', """, url, """);
     const img = new Image();
     img.crossOrigin = 'anonymous';
     img.onload = () => {
+      console.log('Image loaded successfully:', img.width, 'x', img.height);
       const canvas = document.createElement('canvas');
       canvas.width = img.width;
       canvas.height = img.height;
       const ctx = canvas.getContext('2d');
       ctx.drawImage(img, 0, 0);
       const imageData = ctx.getImageData(0, 0, img.width, img.height);
-      resolve({
+      console.log('ImageData obtained, length:', imageData.data.length);
+      const result = {
         width: img.width,
         height: img.height,
-        data: Array.from(imageData.data)
-      });
+        data: imageData.data  // Keep as Uint8ClampedArray for faster access
+      };
+      console.log('Resolving with result:', result.width, 'x', result.height, 'data type:', typeof result.data, 'length:', result.data.length);
+      resolve(result);
     };
-    img.onerror = () => resolve({ width: 1, height: 1, data: [200, 200, 200, 255] });
+    img.onerror = (e) => {
+      console.error('Failed to load texture:', e);
+      resolve({ width: 1, height: 1, data: new Uint8ClampedArray([200, 200, 200, 255]) });
+    };
     img.src = """, url, """;
   });"""].}
   result = promise

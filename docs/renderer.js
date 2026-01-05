@@ -1856,22 +1856,30 @@ function loadTexture_469763010(url_469763011) {
 
     var promise_469763016 = null;
     promise_469763016 = new Promise((resolve, reject) => {
+    console.log('Starting to load texture from:', url_469763011);
     const img = new Image();
     img.crossOrigin = 'anonymous';
     img.onload = () => {
+      console.log('Image loaded successfully:', img.width, 'x', img.height);
       const canvas = document.createElement('canvas');
       canvas.width = img.width;
       canvas.height = img.height;
       const ctx = canvas.getContext('2d');
       ctx.drawImage(img, 0, 0);
       const imageData = ctx.getImageData(0, 0, img.width, img.height);
-      resolve({
+      console.log('ImageData obtained, length:', imageData.data.length);
+      const result = {
         width: img.width,
         height: img.height,
-        data: Array.from(imageData.data)
-      });
+        data: imageData.data  // Keep as Uint8ClampedArray for faster access
+      };
+      console.log('Resolving with result:', result.width, 'x', result.height, 'data type:', typeof result.data, 'length:', result.data.length);
+      resolve(result);
     };
-    img.onerror = () => resolve({ width: 1, height: 1, data: [200, 200, 200, 255] });
+    img.onerror = (e) => {
+      console.error('Failed to load texture:', e);
+      resolve({ width: 1, height: 1, data: new Uint8ClampedArray([200, 200, 200, 255]) });
+    };
     img.src = url_469763011;
   });
     result_469763014 = promise_469763016;
