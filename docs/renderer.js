@@ -1855,8 +1855,8 @@ function loadTexture_469763010(url_469763011) {
   var result_469763014 = null;
 
     var promise_469763016 = null;
-    promise_469763016 = new Promise((resolve, reject) => {
-    console.log('Starting to load texture from:', url_469763011);
+    promise_469763016 = new Promise((resolve, reject) => {    const urlStr = url_469763011;
+    console.log('Starting to load texture from:', urlStr);
     const img = new Image();
     img.crossOrigin = 'anonymous';
     img.onload = () => {
@@ -1871,16 +1871,16 @@ function loadTexture_469763010(url_469763011) {
       const result = {
         width: img.width,
         height: img.height,
-        data: imageData.data  // Keep as Uint8ClampedArray for faster access
+        data: imageData.data
       };
-      console.log('Resolving with result:', result.width, 'x', result.height, 'data type:', typeof result.data, 'length:', result.data.length);
+      console.log('Resolving with result:', result.width, 'x', result.height);
       resolve(result);
     };
     img.onerror = (e) => {
-      console.error('Failed to load texture:', e);
+      console.error('Failed to load texture:', urlStr, e);
       resolve({ width: 1, height: 1, data: new Uint8ClampedArray([200, 200, 200, 255]) });
     };
-    img.src = url_469763011;
+    img.src = urlStr;
   });
     result_469763014 = promise_469763016;
 
@@ -1910,7 +1910,7 @@ function selectModel(modelUrl_469763235, textureUrl_469763236) {
         statusEl_469763246.innerHTML = "Loading model...";
         renderer_469762107[0].model = nimCopy(renderer_469762107[0].model, (await loadModel_469762947(cstrToNimstr(modelUrl_469763235))), NTI469762076);
         statusEl_469763246.innerHTML = "Loading texture...";
-        var texJs_469763255 = (await loadTexture_469763010(cstrToNimstr(textureUrl_469763236)));
+        var texJs_469763255 = (await loadTexture_469763010(textureUrl_469763236));
         renderer_469762107[0].texture = jsTextureToNim_469763026(texJs_469763255);
         statusEl_469763246.innerHTML = toJSStr((makeNimstrLit("Vertices: ") || []).concat(HEX24_335544323((renderer_469762107[0].model.vertices).length) || [],makeNimstrLit(" | Faces: ") || [],HEX24_335544323((renderer_469762107[0].model.faces).length) || [],makeNimstrLit(" | Tex: ") || [],HEX24_335544323(renderer_469762107[0].texture.width) || [],makeNimstrLit("x") || [],HEX24_335544323(renderer_469762107[0].texture.height) || []));
         result_469763240 = undefined;

@@ -385,11 +385,12 @@ proc loadModel(url: string): Future[Model] {.async.} =
   let text = await response.text()
   result = parseObjContent($text)
 
-proc loadTexture(url: string): Future[JsObject] =
+proc loadTexture(url: cstring): Future[JsObject] =
   ## Load texture from image URL using JavaScript Image API
   var promise: Future[JsObject]
-  {.emit: [promise, """ = new Promise((resolve, reject) => {
-    console.log('Starting to load texture from:', """, url, """);
+  {.emit: [promise, " = new Promise((resolve, reject) => {", """
+    const urlStr = """, url, """;
+    console.log('Starting to load texture from:', urlStr);
     const img = new Image();
     img.crossOrigin = 'anonymous';
     img.onload = () => {
@@ -404,16 +405,16 @@ proc loadTexture(url: string): Future[JsObject] =
       const result = {
         width: img.width,
         height: img.height,
-        data: imageData.data  // Keep as Uint8ClampedArray for faster access
+        data: imageData.data
       };
-      console.log('Resolving with result:', result.width, 'x', result.height, 'data type:', typeof result.data, 'length:', result.data.length);
+      console.log('Resolving with result:', result.width, 'x', result.height);
       resolve(result);
     };
     img.onerror = (e) => {
-      console.error('Failed to load texture:', e);
+      console.error('Failed to load texture:', urlStr, e);
       resolve({ width: 1, height: 1, data: new Uint8ClampedArray([200, 200, 200, 255]) });
     };
-    img.src = """, url, """;
+    img.src = urlStr;
   });"""].}
   result = promise
 
@@ -519,7 +520,7 @@ proc selectModel(modelUrl: cstring, textureUrl: cstring) {.exportc.} =
     statusEl.innerHTML = cstring("Loading texture...")
 
     # Load texture
-    let texJs = await loadTexture($textureUrl)
+    let texJs = await loadTexture(textureUrl)
     renderer.texture = jsTextureToNim(texJs)
 
     statusEl.innerHTML = cstring("Vertices: " & $renderer.model.vertices.len &
