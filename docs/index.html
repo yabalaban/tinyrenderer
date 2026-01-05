@@ -138,6 +138,7 @@
         <option value="models/diablo3_pose.obj">Diablo 3 Pose</option>
       </select>
       <button id="autoRotateBtn" onclick="toggleAutoRotate()">Auto-Rotate: ON</button>
+      <button onclick="clearCacheAndReload()" style="border-color: #ff6b6b55; color: #ff6b6b;">↻ Clear Cache</button>
     </div>
 
     <div id="status">Loading...</div>
@@ -154,6 +155,19 @@
     </p>
   </div>
 
+  <script>
+    // Cache-busting: add timestamp to script URL
+    function clearCacheAndReload() {
+      // Clear caches if available
+      if ('caches' in window) {
+        caches.keys().then(names => {
+          names.forEach(name => caches.delete(name));
+        });
+      }
+      // Force reload with cache bust
+      window.location.href = window.location.pathname + '?v=' + Date.now();
+    }
+  </script>
   <script src="renderer.js"></script>
 </body>
 </html>
