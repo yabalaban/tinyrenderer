@@ -133,12 +133,7 @@
     </div>
 
     <div class="controls">
-      <select id="modelSelect" onchange="loadSelectedModel()">
-        <option value="african_head" data-model="models/african_head.obj" data-texture="models/african_head_diffuse.png">African Head</option>
-        <option value="diablo3_pose" data-model="models/diablo3_pose.obj" data-texture="models/diablo3_pose_diffuse.png">Diablo 3 Pose</option>
-      </select>
       <button id="autoRotateBtn" onclick="toggleAutoRotate()">Auto-Rotate: ON</button>
-      <button onclick="clearCacheAndReload()" style="border-color: #ff6b6b55; color: #ff6b6b;">↻ Clear Cache</button>
     </div>
 
     <div id="status">Loading...</div>
@@ -157,27 +152,8 @@
   </div>
 
   <script>
-    // Load model from select dropdown
-    function loadSelectedModel() {
-      const select = document.getElementById('modelSelect');
-      const option = select.options[select.selectedIndex];
-      const modelUrl = option.getAttribute('data-model');
-      const textureUrl = option.getAttribute('data-texture');
-      selectModel(modelUrl, textureUrl);
-    }
-
-    // Cache-busting: add timestamp to script URL
-    function clearCacheAndReload() {
-      // Clear caches if available
-      if ('caches' in window) {
-        caches.keys().then(names => {
-          names.forEach(name => caches.delete(name));
-        });
-      }
-      // Force reload with cache bust
-      window.location.href = window.location.pathname + '?v=' + Date.now();
-    }
+    // No additional JS needed - renderer handles everything
   </script>
-  <script src="renderer.js?v=1767656305"></script>
+  <script src="renderer.js?v=1767656625"></script>
 </body>
 </html>
