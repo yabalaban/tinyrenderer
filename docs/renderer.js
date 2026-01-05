@@ -715,7 +715,7 @@ function normalize_1157627947(v_1157627948) {
 
 }
 var bgColor_503316556 = createColor_503316541(20, 20, 30, 255);
-var lightDir_503316557 = normalize_1157627947(vec3_1157627910(0.0, 0.0, -1.0));
+var lightDir_503316557 = normalize_1157627947(vec3_1157627910(0.2, 0.3, 1.0));
 
 function HEX2BHEX3D_989857831(x_989857833, x_989857833_Idx, y_989857834) {
     x_989857833[x_989857833_Idx] = (x_989857833[x_989857833_Idx] + y_989857834);
@@ -1254,15 +1254,11 @@ function HEX3Aanonymous_503316862(a_503316863, b_503316864) {
               var edge1_503316845 = HEX2D_1157627928(rv1_503316841, rv0_503316838);
               var edge2_503316846 = HEX2D_1157627928(rv2_503316844, rv0_503316838);
               var normal_503316847 = normalize_1157627947(cross_1157627940(edge1_503316845, edge2_503316846));
-              if ((0.0 < normal_503316847.z)) {
+              if ((normal_503316847.z < 0.0)) {
               break Label4;
               }
               
-              var intensity_503316848 = max_33556208(0.0, -(dot_1157627936(normal_503316847, lightDir_503316557)));
-              if ((intensity_503316848 <= 0.0)) {
-              break Label4;
-              }
-              
+              var intensity_503316848 = max_33556208(0.1, dot_1157627936(normal_503316847, lightDir_503316557));
               var p0_503316849 = projectRotated_503316727(r_503316769, rv0_503316838);
               var p1_503316850 = projectRotated_503316727(r_503316769, rv1_503316841);
               var p2_503316851 = projectRotated_503316727(r_503316769, rv2_503316844);
