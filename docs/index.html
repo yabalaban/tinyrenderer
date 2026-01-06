@@ -29,13 +29,46 @@
       margin-bottom: 32px;
     }
 
+    .title-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      margin-bottom: 8px;
+    }
+
     h1 {
       font-size: 1.1rem;
       font-weight: 500;
       letter-spacing: 0.2em;
       text-transform: uppercase;
       color: #fff;
-      margin-bottom: 8px;
+    }
+
+    .mode-toggle {
+      padding: 4px 10px;
+      font-size: 0.6rem;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 4px;
+      background: transparent;
+      color: rgba(255,255,255,0.5);
+      cursor: pointer;
+      transition: all 0.2s ease;
+      font-family: 'SF Mono', ui-monospace, monospace;
+    }
+
+    .mode-toggle:hover {
+      border-color: rgba(255,255,255,0.4);
+      color: rgba(255,255,255,0.8);
+    }
+
+    .mode-toggle.active {
+      background: #fff;
+      color: #0a0a0b;
+      border-color: #fff;
     }
 
     .tagline {
@@ -186,7 +219,10 @@
 </head>
 <body>
   <div class="hero">
-    <h1>TinyRenderer</h1>
+    <div class="title-row">
+      <h1>TinyRenderer</h1>
+      <button id="asciiBtn" class="mode-toggle" onclick="toggleAscii(); this.classList.toggle('active')">ASCII</button>
+    </div>
     <p class="tagline">Software rasterizer · No WebGL · Pure pixels</p>
   </div>
 
@@ -198,7 +234,6 @@
       <div class="stats" id="status">Loading...</div>
       <div class="controls">
         <button id="autoRotateBtn" class="active" onclick="toggleAutoRotate(); this.classList.toggle('active')">Rotate</button>
-        <button id="asciiBtn" onclick="toggleAscii(); this.classList.toggle('active')">ASCII</button>
       </div>
     </div>
   </div>
@@ -216,6 +251,6 @@
 
   <div id="buildInfo"></div>
 
-  <script src="renderer.js?v=1767659000"></script>
+  <script src="renderer.js?v=1767658005"></script>
 </body>
 </html>

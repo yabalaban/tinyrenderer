@@ -285,12 +285,16 @@ proc renderAscii(r: Renderer) =
   let cols = r.width div cellSize
   let rows = r.height div cellSize
 
+  # Calculate offset for centering
+  let offsetX = (r.width - cols * cellSize) div 2
+  let offsetY = (r.height - rows * cellSize) div 2
+
   # Clear canvas with background color
-  {.emit: [r.ctx, ".fillStyle='#14141e';"].}
+  {.emit: [r.ctx, ".fillStyle='#0a0a0b';"].}
   {.emit: [r.ctx, ".fillRect(0,0,", r.width, ",", r.height, ");"].}
 
   # Set font for ASCII rendering
-  {.emit: [r.ctx, ".font='6px monospace';"].}
+  {.emit: [r.ctx, ".font='bold 7px monospace';"].}
   {.emit: [r.ctx, ".textBaseline='top';"].}
 
   for row in 0..<rows:
@@ -321,14 +325,20 @@ proc renderAscii(r: Renderer) =
       let avgBright = totalBright div count
 
       # Skip dark pixels (background)
-      if avgBright > 25:
-        # Map brightness to ASCII character
-        let charIdx = min((avgBright * (asciiChars.len - 1)) div 255, asciiChars.len - 1)
+      if avgBright > 20:
+        # Boost brightness for better contrast in character selection
+        let boostedBright = min(255, (avgBright - 20) * 3)
+        let charIdx = min((boostedBright * (asciiChars.len - 1)) div 255, asciiChars.len - 1)
         let ch = asciiChars[charIdx]
 
-        # Set color and draw character
-        {.emit: [r.ctx, ".fillStyle='rgb(", avgR, ",", avgG, ",", avgB, ")';"].}
-        {.emit: [r.ctx, ".fillText('", ch, "',", col * cellSize, ",", row * cellSize, ");"].}
+        # Boost color intensity for better visibility
+        let boostR = min(255, avgR * 5 div 3)
+        let boostG = min(255, avgG * 5 div 3)
+        let boostB = min(255, avgB * 5 div 3)
+
+        # Set color and draw character (with centering offset)
+        {.emit: [r.ctx, ".fillStyle='rgb(", boostR, ",", boostG, ",", boostB, ")';"].}
+        {.emit: [r.ctx, ".fillText('", ch, "',", col * cellSize + offsetX, ",", row * cellSize + offsetY, ");"].}
 
 proc render(r: Renderer) =
   if r.asciiMode:
