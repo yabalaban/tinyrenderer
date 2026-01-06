@@ -329,16 +329,18 @@ proc renderAscii(r: Renderer) =
         # Boost brightness for better contrast in character selection
         let boostedBright = min(255, (avgBright - 20) * 3)
         let charIdx = min((boostedBright * (asciiChars.len - 1)) div 255, asciiChars.len - 1)
-        let ch = asciiChars[charIdx]
+        let charCode = ord(asciiChars[charIdx])
 
         # Boost color intensity for better visibility
         let boostR = min(255, avgR * 5 div 3)
         let boostG = min(255, avgG * 5 div 3)
         let boostB = min(255, avgB * 5 div 3)
 
-        # Set color and draw character (with centering offset)
-        {.emit: [r.ctx, ".fillStyle='rgb(", boostR, ",", boostG, ",", boostB, ")';"].}
-        {.emit: [r.ctx, ".fillText('", ch, "',", col * cellSize + offsetX, ",", row * cellSize + offsetY, ");"].}
+        # Set color using JS string concatenation (not literals)
+        let drawX = col * cellSize + offsetX
+        let drawY = row * cellSize + offsetY
+        {.emit: [r.ctx, ".fillStyle='rgb('+", boostR, "+','+", boostG, "+','+", boostB, "+')';"].}
+        {.emit: [r.ctx, ".fillText(String.fromCharCode(", charCode, "),", drawX, ",", drawY, ");"].}
 
 proc render(r: Renderer) =
   if r.asciiMode:
