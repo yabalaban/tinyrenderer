@@ -5,15 +5,12 @@ import vec3
 # Fetch API bindings for JS backend
 type
   Response* = ref object of JsObject
-  FetchOptions* = ref object of JsObject
 
 proc text*(r: Response): Future[cstring] {.importjs: "#.text()".}
 proc fetch*(url: cstring): Future[Response] {.importjs: "fetch(#)".}
 
 type
   UV = tuple[u, v: float]
-
-  Vertex = Vec3
 
   Face = object
     v: array[3, int]   # Vertex indices
@@ -24,7 +21,7 @@ type
     jsData*: JsObject   # Keep data in JS for fast access
 
   Model = object
-    vertices: seq[Vertex]
+    vertices: seq[Vec3]
     texCoords: seq[UV]
     faces: seq[Face]
 
@@ -47,7 +44,6 @@ var renderer: Renderer
 
 # ASCII characters sorted by density (dark to bright) - extended set for finer gradation
 const asciiChars = " .'`^\",:;Il!i><~+_-?][}{1)(|/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$"
-const cellSize = 6  # pixels per ASCII character
 
 # Light direction (normalized vector pointing FROM the light source)
 # Camera at z=0 looking towards +Z, so light from front means negative Z
@@ -88,6 +84,10 @@ proc drawTexturedTriangle(r: Renderer,
   let texW = tex.width - 1
   let texH = tex.height - 1
   let texWidth = tex.width
+
+  # Cache texture data reference for inner loop
+  var texData: JsObject
+  {.emit: [texData, "=", tex, ".jsData.data;"].}
 
   # Draw both halves of triangle
   for i in 0..<totalHeight:
@@ -145,7 +145,7 @@ proc drawTexturedTriangle(r: Renderer,
       let tidx = (tpy * texWidth + tpx) * 4
 
       var tr, tg, tb: int
-      {.emit: ["var td=", tex, ".jsData.data;", tr, "=td[", tidx, "];", tg, "=td[", tidx, "+1];", tb, "=td[", tidx, "+2];"].}
+      {.emit: [tr, "=", texData, "[", tidx, "];", tg, "=", texData, "[", tidx, "+1];", tb, "=", texData, "[", tidx, "+2];"].}
 
       # Apply lighting and write pixel directly
       {.emit: [r.pixels, "[", baseIdx, "]=", tr, "*", intensity, "|0;"].}
@@ -283,7 +283,7 @@ proc renderAscii(r: Renderer) =
   r.renderToBuffer()
 
   # Zoom: sample from 240x240 center-top region of the buffer
-  let srcSize = 240
+  const srcSize = 240
   let srcOffsetX = (r.width - srcSize) div 2  # center horizontally
   let srcOffsetY = r.height div 5  # offset down to capture head
 
@@ -354,7 +354,7 @@ proc render(r: Renderer) =
     r.renderNormal()
 
 proc parseObjContent(content: string): Model =
-  var vertices: seq[Vertex] = @[]
+  var vertices: seq[Vec3] = @[]
   var texCoords: seq[UV] = @[]
   var faces: seq[Face] = @[]
 
