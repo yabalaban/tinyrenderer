@@ -282,23 +282,21 @@ proc renderAscii(r: Renderer) =
   ## ASCII art rendering with colors from texture - zoomed on upper body
   r.renderToBuffer()
 
-  # Zoom: sample from center-top region of the buffer (upper body/head area)
-  let zoomScale = 2  # 2x zoom
-  let srcWidth = r.width div zoomScale
-  let srcHeight = r.height div zoomScale
-  let srcOffsetX = (r.width - srcWidth) div 2  # center horizontally
-  let srcOffsetY = r.height div 6  # offset down slightly to capture head
+  # Zoom: sample from 240x240 center-top region of the buffer
+  let srcSize = 240
+  let srcOffsetX = (r.width - srcSize) div 2  # center horizontally
+  let srcOffsetY = r.height div 5  # offset down to capture head
 
-  let cols = r.width div cellSize
-  let rows = r.height div cellSize
-  let srcCellSize = cellSize div zoomScale  # smaller source cells for zoom
+  let asciiCellSize = 10  # larger cells for chunky ASCII
+  let cols = r.width div asciiCellSize
+  let rows = r.height div asciiCellSize
+  let srcCellSize = srcSize div cols  # map source to output
 
-  # Clear canvas with black background
-  {.emit: [r.ctx, ".fillStyle='#000';"].}
-  {.emit: [r.ctx, ".fillRect(0,0,", r.width, ",", r.height, ");"].}
+  # Clear canvas (transparent - use page background)
+  {.emit: [r.ctx, ".clearRect(0,0,", r.width, ",", r.height, ");"].}
 
   # Set font for ASCII rendering
-  {.emit: [r.ctx, ".font='bold 7px monospace';"].}
+  {.emit: [r.ctx, ".font='bold 11px monospace';"].}
   {.emit: [r.ctx, ".textBaseline='top';"].}
 
   for row in 0..<rows:
@@ -344,8 +342,8 @@ proc renderAscii(r: Renderer) =
           let boostB = min(255, avgB * 5 div 3)
 
           # Draw character
-          let drawX = col * cellSize
-          let drawY = row * cellSize
+          let drawX = col * asciiCellSize
+          let drawY = row * asciiCellSize
           {.emit: [r.ctx, ".fillStyle='rgb('+", boostR, "+','+", boostG, "+','+", boostB, "+')';"].}
           {.emit: [r.ctx, ".fillText(String.fromCharCode(", charCode, "),", drawX, ",", drawY, ");"].}
 
