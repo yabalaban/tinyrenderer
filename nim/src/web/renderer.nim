@@ -279,18 +279,22 @@ proc renderNormal(r: Renderer) =
   {.emit: [r.ctx, ".putImageData(", r.imageData, ", 0, 0);"].}
 
 proc renderAscii(r: Renderer) =
-  ## ASCII art rendering with colors from texture
+  ## ASCII art rendering with colors from texture - zoomed on upper body
   r.renderToBuffer()
+
+  # Zoom: sample from center-top region of the buffer (upper body/head area)
+  let zoomScale = 2  # 2x zoom
+  let srcWidth = r.width div zoomScale
+  let srcHeight = r.height div zoomScale
+  let srcOffsetX = (r.width - srcWidth) div 2  # center horizontally
+  let srcOffsetY = r.height div 6  # offset down slightly to capture head
 
   let cols = r.width div cellSize
   let rows = r.height div cellSize
+  let srcCellSize = cellSize div zoomScale  # smaller source cells for zoom
 
-  # Calculate offset for centering
-  let offsetX = (r.width - cols * cellSize) div 2
-  let offsetY = (r.height - rows * cellSize) div 2
-
-  # Clear canvas with white background
-  {.emit: [r.ctx, ".fillStyle='#fff';"].}
+  # Clear canvas with black background
+  {.emit: [r.ctx, ".fillStyle='#000';"].}
   {.emit: [r.ctx, ".fillRect(0,0,", r.width, ",", r.height, ");"].}
 
   # Set font for ASCII rendering
@@ -300,47 +304,50 @@ proc renderAscii(r: Renderer) =
   for row in 0..<rows:
     for col in 0..<cols:
       var totalR, totalG, totalB, totalBright: int = 0
+      var sampleCount = 0
 
-      # Sample pixels in this cell
-      for dy in 0..<cellSize:
-        for dx in 0..<cellSize:
-          let x = col * cellSize + dx
-          let y = row * cellSize + dy
-          let idx = (y * r.width + x) * 4
+      # Sample pixels from zoomed source region
+      for dy in 0..<srcCellSize:
+        for dx in 0..<srcCellSize:
+          let srcX = srcOffsetX + (col * srcCellSize) + dx
+          let srcY = srcOffsetY + (row * srcCellSize) + dy
+          if srcX >= 0 and srcX < r.width and srcY >= 0 and srcY < r.height:
+            let idx = (srcY * r.width + srcX) * 4
 
-          var pr, pg, pb: int
-          {.emit: [pr, "=", r.pixels, "[", idx, "];"].}
-          {.emit: [pg, "=", r.pixels, "[", idx, "+1];"].}
-          {.emit: [pb, "=", r.pixels, "[", idx, "+2];"].}
+            var pr, pg, pb: int
+            {.emit: [pr, "=", r.pixels, "[", idx, "];"].}
+            {.emit: [pg, "=", r.pixels, "[", idx, "+1];"].}
+            {.emit: [pb, "=", r.pixels, "[", idx, "+2];"].}
 
-          totalR += pr
-          totalG += pg
-          totalB += pb
-          totalBright += (pr + pg + pb) div 3
+            totalR += pr
+            totalG += pg
+            totalB += pb
+            totalBright += (pr + pg + pb) div 3
+            sampleCount += 1
 
-      let count = cellSize * cellSize
-      let avgR = totalR div count
-      let avgG = totalG div count
-      let avgB = totalB div count
-      let avgBright = totalBright div count
+      if sampleCount > 0:
+        let avgR = totalR div sampleCount
+        let avgG = totalG div sampleCount
+        let avgB = totalB div sampleCount
+        let avgBright = totalBright div sampleCount
 
-      # Skip dark pixels (background)
-      if avgBright > 20:
-        # Boost brightness for better contrast in character selection
-        let boostedBright = min(255, (avgBright - 20) * 3)
-        let charIdx = min((boostedBright * (asciiChars.len - 1)) div 255, asciiChars.len - 1)
-        let charCode = ord(asciiChars[charIdx])
+        # Skip dark pixels (background)
+        if avgBright > 20:
+          # Boost brightness for better contrast in character selection
+          let boostedBright = min(255, (avgBright - 20) * 3)
+          let charIdx = min((boostedBright * (asciiChars.len - 1)) div 255, asciiChars.len - 1)
+          let charCode = ord(asciiChars[charIdx])
 
-        # Boost color intensity for better visibility
-        let boostR = min(255, avgR * 5 div 3)
-        let boostG = min(255, avgG * 5 div 3)
-        let boostB = min(255, avgB * 5 div 3)
+          # Boost color intensity for better visibility
+          let boostR = min(255, avgR * 5 div 3)
+          let boostG = min(255, avgG * 5 div 3)
+          let boostB = min(255, avgB * 5 div 3)
 
-        # Set color using JS string concatenation (not literals)
-        let drawX = col * cellSize + offsetX
-        let drawY = row * cellSize + offsetY
-        {.emit: [r.ctx, ".fillStyle='rgb('+", boostR, "+','+", boostG, "+','+", boostB, "+')';"].}
-        {.emit: [r.ctx, ".fillText(String.fromCharCode(", charCode, "),", drawX, ",", drawY, ");"].}
+          # Draw character
+          let drawX = col * cellSize
+          let drawY = row * cellSize
+          {.emit: [r.ctx, ".fillStyle='rgb('+", boostR, "+','+", boostG, "+','+", boostB, "+')';"].}
+          {.emit: [r.ctx, ".fillText(String.fromCharCode(", charCode, "),", drawX, ",", drawY, ");"].}
 
 proc render(r: Renderer) =
   if r.asciiMode:
