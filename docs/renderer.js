@@ -1373,13 +1373,13 @@ function renderToBuffer_503317068(r_503317069) {
 
 function renderAscii_503317080(r_503317081) {
     renderToBuffer_503317068(r_503317081);
-    var cols_503317082 = divInt(r_503317081.width, 6);
-    var rows_503317083 = divInt(r_503317081.height, 6);
-    var offsetX_503317084 = divInt(subInt(r_503317081.width, mulInt(cols_503317082, 6)), 2);
-    var offsetY_503317085 = divInt(subInt(r_503317081.height, mulInt(rows_503317083, 6)), 2);
+    var cols_503317082 = divInt(r_503317081.width, 8);
+    var rows_503317083 = divInt(r_503317081.height, 8);
+    var offsetX_503317084 = divInt(subInt(r_503317081.width, mulInt(cols_503317082, 8)), 2);
+    var offsetY_503317085 = divInt(subInt(r_503317081.height, mulInt(rows_503317083, 8)), 2);
     r_503317081.ctx.fillStyle='#0a0a0b';
     r_503317081.ctx.fillRect(0,0,r_503317081.width,r_503317081.height);
-    r_503317081.ctx.font='bold 7px monospace';
+    r_503317081.ctx.font='bold 9px monospace';
     r_503317081.ctx.textBaseline='top';
     Label1: do {
       var row_503317090 = 0;
@@ -1404,17 +1404,17 @@ function renderAscii_503317080(r_503317081) {
                       var i_503317462 = 0;
                       Label8: do {
                           Label9: while (true) {
-                          if (!(i_503317462 < 6)) break Label9;
+                          if (!(i_503317462 < 8)) break Label9;
                             dy_503317104 = i_503317462;
                             Label10: do {
                               var dx_503317109 = 0;
                               var i_503317460 = 0;
                               Label11: do {
                                   Label12: while (true) {
-                                  if (!(i_503317460 < 6)) break Label12;
+                                  if (!(i_503317460 < 8)) break Label12;
                                     dx_503317109 = i_503317460;
-                                    var x_503317110 = addInt(mulInt(col_503317095, 6), dx_503317109);
-                                    var y_503317111 = addInt(mulInt(row_503317090, 6), dy_503317104);
+                                    var x_503317110 = addInt(mulInt(col_503317095, 8), dx_503317109);
+                                    var y_503317111 = addInt(mulInt(row_503317090, 8), dy_503317104);
                                     var idx_503317112 = mulInt(addInt(mulInt(y_503317111, r_503317081.width), x_503317110), 4);
                                     var pr_503317113 = 0;
                                     var pg_503317114 = 0;
@@ -1434,7 +1434,7 @@ function renderAscii_503317080(r_503317081) {
                           }
                       } while (false);
                     } while (false);
-                    var count_503317132 = 36;
+                    var count_503317132 = 64;
                     var avgR_503317133 = divInt(totalR_503317096, count_503317132);
                     var avgG_503317134 = divInt(totalG_503317097, count_503317132);
                     var avgB_503317135 = divInt(totalB_503317098, count_503317132);
@@ -1446,8 +1446,8 @@ function renderAscii_503317080(r_503317081) {
                     var boostR_503317143 = nimMin(255, divInt(mulInt(avgR_503317133, 5), 3));
                     var boostG_503317144 = nimMin(255, divInt(mulInt(avgG_503317134, 5), 3));
                     var boostB_503317145 = nimMin(255, divInt(mulInt(avgB_503317135, 5), 3));
-                    var drawX_503317146 = addInt(mulInt(col_503317095, 6), offsetX_503317084);
-                    var drawY_503317147 = addInt(mulInt(row_503317090, 6), offsetY_503317085);
+                    var drawX_503317146 = addInt(mulInt(col_503317095, 8), offsetX_503317084);
+                    var drawY_503317147 = addInt(mulInt(row_503317090, 8), offsetY_503317085);
                     r_503317081.ctx.fillStyle='rgb('+boostR_503317143+','+boostG_503317144+','+boostB_503317145+')';
                     r_503317081.ctx.fillText(String.fromCharCode(charCode_503317142),drawX_503317146,drawY_503317147);
                     }
@@ -2069,7 +2069,7 @@ function main() {
     setupEventHandlers_503317505(renderer_503316535[0]);
     var buildInfo_503317708 = document.getElementById("buildInfo");
     if (!((buildInfo_503317708 == null))) {
-    buildInfo_503317708.innerHTML = "Build: 2026-01-06 00:10:12";
+    buildInfo_503317708.innerHTML = "Build: 2026-01-06 00:17:05";
     }
     
     selectModel("models/diablo3_pose.obj", "models/diablo3_pose_diffuse.png");

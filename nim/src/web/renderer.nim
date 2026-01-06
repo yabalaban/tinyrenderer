@@ -47,7 +47,7 @@ var renderer: Renderer
 
 # ASCII characters sorted by density (dark to bright)
 const asciiChars = " .:-=+*#%@"
-const cellSize = 6  # pixels per ASCII character
+const cellSize = 8  # pixels per ASCII character
 
 # Light direction (normalized vector pointing FROM the light source)
 # Camera at z=0 looking towards +Z, so light from front means negative Z
@@ -294,7 +294,7 @@ proc renderAscii(r: Renderer) =
   {.emit: [r.ctx, ".fillRect(0,0,", r.width, ",", r.height, ");"].}
 
   # Set font for ASCII rendering
-  {.emit: [r.ctx, ".font='bold 7px monospace';"].}
+  {.emit: [r.ctx, ".font='bold 9px monospace';"].}
   {.emit: [r.ctx, ".textBaseline='top';"].}
 
   for row in 0..<rows:
