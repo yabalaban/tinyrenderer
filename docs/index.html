@@ -67,35 +67,6 @@
       cursor: grabbing;
     }
 
-    #canvas.hidden {
-      display: none;
-    }
-
-    #asciiOutput {
-      display: none;
-      font-family: 'SF Mono', 'Menlo', 'Monaco', 'Courier New', monospace;
-      font-size: 6px;
-      line-height: 6px;
-      letter-spacing: 0px;
-      background: #0d0d0e;
-      padding: 0;
-      margin: 0;
-      white-space: pre;
-      cursor: grab;
-      user-select: none;
-      width: 600px;
-      height: 600px;
-      overflow: hidden;
-    }
-
-    #asciiOutput:active {
-      cursor: grabbing;
-    }
-
-    #asciiOutput.visible {
-      display: block;
-    }
-
     .overlay {
       position: absolute;
       bottom: 0;
@@ -210,14 +181,6 @@
         gap: 8px;
         align-items: center;
       }
-
-      #asciiOutput {
-        font-size: 4px;
-        line-height: 4px;
-        width: 100%;
-        height: auto;
-        aspect-ratio: 1;
-      }
     }
   </style>
 </head>
@@ -230,13 +193,12 @@
   <div class="viewer">
     <div class="canvas-frame">
       <canvas id="canvas"></canvas>
-      <pre id="asciiOutput"></pre>
     </div>
     <div class="overlay">
       <div class="stats" id="status">Loading...</div>
       <div class="controls">
-        <button id="autoRotateBtn" class="active" onclick="toggleAutoRotate()">Rotate</button>
-        <button id="asciiBtn" onclick="toggleAscii()">ASCII</button>
+        <button id="autoRotateBtn" class="active" onclick="toggleAutoRotate(); this.classList.toggle('active')">Rotate</button>
+        <button id="asciiBtn" onclick="toggleAscii(); this.classList.toggle('active')">ASCII</button>
       </div>
     </div>
   </div>
@@ -254,128 +216,6 @@
 
   <div id="buildInfo"></div>
 
-  <script>
-    // ASCII art configuration
-    const ASCII_CHARS = ' .\'`^",:;Il!i><~+_-?][}{1)(|/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$';
-    let asciiMode = false;
-    let lastAsciiUpdate = 0;
-    const ASCII_UPDATE_INTERVAL = 50; // ms between ASCII updates
-
-    // Toggle button styles
-    const origToggle = window.toggleAutoRotate;
-    window.toggleAutoRotate = function() {
-      origToggle && origToggle();
-      document.getElementById('autoRotateBtn').classList.toggle('active');
-    };
-
-    function toggleAscii() {
-      asciiMode = !asciiMode;
-      const canvas = document.getElementById('canvas');
-      const ascii = document.getElementById('asciiOutput');
-      const btn = document.getElementById('asciiBtn');
-
-      if (asciiMode) {
-        canvas.classList.add('hidden');
-        ascii.classList.add('visible');
-        btn.classList.add('active');
-      } else {
-        canvas.classList.remove('hidden');
-        ascii.classList.remove('visible');
-        btn.classList.remove('active');
-      }
-    }
-
-    function canvasToAscii(canvas) {
-      const ctx = canvas.getContext('2d');
-      const width = canvas.width;
-      const height = canvas.height;
-      const imageData = ctx.getImageData(0, 0, width, height);
-      const pixels = imageData.data;
-
-      // Character cell size (pixels per character)
-      const cellW = 6;
-      const cellH = 6;
-      const cols = Math.floor(width / cellW);
-      const rows = Math.floor(height / cellH);
-
-      let html = '';
-
-      for (let row = 0; row < rows; row++) {
-        for (let col = 0; col < cols; col++) {
-          let totalR = 0, totalG = 0, totalB = 0, totalBright = 0;
-          let count = 0;
-
-          // Sample pixels in this cell
-          for (let dy = 0; dy < cellH; dy++) {
-            for (let dx = 0; dx < cellW; dx++) {
-              const x = col * cellW + dx;
-              const y = row * cellH + dy;
-              const idx = (y * width + x) * 4;
-
-              const r = pixels[idx];
-              const g = pixels[idx + 1];
-              const b = pixels[idx + 2];
-
-              totalR += r;
-              totalG += g;
-              totalB += b;
-              totalBright += (r + g + b) / 3;
-              count++;
-            }
-          }
-
-          // Average values
-          const avgR = Math.round(totalR / count);
-          const avgG = Math.round(totalG / count);
-          const avgB = Math.round(totalB / count);
-          const avgBright = totalBright / count;
-
-          // Map brightness to ASCII character
-          const charIdx = Math.floor((avgBright / 255) * (ASCII_CHARS.length - 1));
-          const char = ASCII_CHARS[charIdx] || ' ';
-
-          // Skip dark pixels (background) for cleaner look
-          if (avgBright < 25) {
-            html += ' ';
-          } else {
-            html += `<span style="color:rgb(${avgR},${avgG},${avgB})">${char}</span>`;
-          }
-        }
-        html += '\n';
-      }
-
-      return html;
-    }
-
-    // Hook into render loop
-    const origRAF = window.requestAnimationFrame;
-    window.requestAnimationFrame = function(callback) {
-      return origRAF(function(timestamp) {
-        callback(timestamp);
-
-        // Update ASCII display if enabled
-        if (asciiMode && timestamp - lastAsciiUpdate > ASCII_UPDATE_INTERVAL) {
-          lastAsciiUpdate = timestamp;
-          const canvas = document.getElementById('canvas');
-          const ascii = document.getElementById('asciiOutput');
-          ascii.innerHTML = canvasToAscii(canvas);
-        }
-      });
-    };
-
-    // Forward mouse events from ASCII to canvas
-    document.addEventListener('DOMContentLoaded', function() {
-      const ascii = document.getElementById('asciiOutput');
-      const canvas = document.getElementById('canvas');
-
-      ['mousedown', 'mousemove', 'mouseup', 'touchstart', 'touchmove', 'touchend'].forEach(evt => {
-        ascii.addEventListener(evt, function(e) {
-          const newEvt = new e.constructor(e.type, e);
-          canvas.dispatchEvent(newEvt);
-        });
-      });
-    });
-  </script>
-  <script src="renderer.js?v=1767658000"></script>
+  <script src="renderer.js?v=1767659000"></script>
 </body>
 </html>

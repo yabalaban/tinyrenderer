@@ -39,10 +39,15 @@ type
     rotationY: float
     rotationX: float
     autoRotate: bool
+    asciiMode: bool
     dragging: bool
     lastMouseX, lastMouseY: int
 
 var renderer: Renderer
+
+# ASCII characters sorted by density (dark to bright)
+const asciiChars = " .:-=+*#%@"
+const cellSize = 6  # pixels per ASCII character
 
 # Light direction (normalized vector pointing FROM the light source)
 # Camera at z=0 looking towards +Z, so light from front means negative Z
@@ -260,15 +265,76 @@ proc drawModel(r: Renderer) =
       fd.intensity
     )
 
-proc render(r: Renderer) =
+proc renderToBuffer(r: Renderer) =
+  ## Render model to pixel buffer (without displaying)
   r.clear()
   var hasTexture: bool
   {.emit: [hasTexture, " = !!", r.texture, " && !!", r.texture, ".jsData && !!", r.texture, ".jsData.data;"].}
   if r.model.vertices.len > 0 and hasTexture:
     r.drawModel()
 
-  # Copy pixel data to canvas
+proc renderNormal(r: Renderer) =
+  ## Standard pixel rendering
+  r.renderToBuffer()
   {.emit: [r.ctx, ".putImageData(", r.imageData, ", 0, 0);"].}
+
+proc renderAscii(r: Renderer) =
+  ## ASCII art rendering with colors from texture
+  r.renderToBuffer()
+
+  let cols = r.width div cellSize
+  let rows = r.height div cellSize
+
+  # Clear canvas with background color
+  {.emit: [r.ctx, ".fillStyle='#14141e';"].}
+  {.emit: [r.ctx, ".fillRect(0,0,", r.width, ",", r.height, ");"].}
+
+  # Set font for ASCII rendering
+  {.emit: [r.ctx, ".font='6px monospace';"].}
+  {.emit: [r.ctx, ".textBaseline='top';"].}
+
+  for row in 0..<rows:
+    for col in 0..<cols:
+      var totalR, totalG, totalB, totalBright: int = 0
+
+      # Sample pixels in this cell
+      for dy in 0..<cellSize:
+        for dx in 0..<cellSize:
+          let x = col * cellSize + dx
+          let y = row * cellSize + dy
+          let idx = (y * r.width + x) * 4
+
+          var pr, pg, pb: int
+          {.emit: [pr, "=", r.pixels, "[", idx, "];"].}
+          {.emit: [pg, "=", r.pixels, "[", idx, "+1];"].}
+          {.emit: [pb, "=", r.pixels, "[", idx, "+2];"].}
+
+          totalR += pr
+          totalG += pg
+          totalB += pb
+          totalBright += (pr + pg + pb) div 3
+
+      let count = cellSize * cellSize
+      let avgR = totalR div count
+      let avgG = totalG div count
+      let avgB = totalB div count
+      let avgBright = totalBright div count
+
+      # Skip dark pixels (background)
+      if avgBright > 25:
+        # Map brightness to ASCII character
+        let charIdx = min((avgBright * (asciiChars.len - 1)) div 255, asciiChars.len - 1)
+        let ch = asciiChars[charIdx]
+
+        # Set color and draw character
+        {.emit: [r.ctx, ".fillStyle='rgb(", avgR, ",", avgG, ",", avgB, ")';"].}
+        {.emit: [r.ctx, ".fillText('", ch, "',", col * cellSize, ",", row * cellSize, ");"].}
+
+proc render(r: Renderer) =
+  if r.asciiMode:
+    r.renderAscii()
+  else:
+    r.renderNormal()
 
 proc parseObjContent(content: string): Model =
   var vertices: seq[Vertex] = @[]
@@ -429,6 +495,7 @@ proc initRenderer(canvasId: cstring, width, height: int): Renderer =
     rotationY: 0.0,
     rotationX: 0.0,
     autoRotate: true,
+    asciiMode: false,
     dragging: false
   )
 
@@ -453,11 +520,9 @@ proc selectModel(modelUrl: cstring, textureUrl: cstring) {.exportc.} =
 
 proc toggleAutoRotate() {.exportc.} =
   renderer.autoRotate = not renderer.autoRotate
-  let btn = document.getElementById("autoRotateBtn")
-  if renderer.autoRotate:
-    btn.innerHTML = cstring("Auto-Rotate: ON")
-  else:
-    btn.innerHTML = cstring("Auto-Rotate: OFF")
+
+proc toggleAscii() {.exportc.} =
+  renderer.asciiMode = not renderer.asciiMode
 
 const buildTimestamp = CompileDate & " " & CompileTime
 
